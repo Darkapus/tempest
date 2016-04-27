@@ -52,6 +52,33 @@ Handlebars.setDelimiter = function(start,end){
         return Handlebars.original_compile(replacedSource);
     };
 };
+Handlebars.registerHelper({
+    eq: function (v1, v2) {
+        return v1 === v2;
+    },
+    ne: function (v1, v2) {
+        return v1 !== v2;
+    },
+    lt: function (v1, v2) {
+        return v1 < v2;
+    },
+    gt: function (v1, v2) {
+        return v1 > v2;
+    },
+    lte: function (v1, v2) {
+        return v1 <= v2;
+    },
+    gte: function (v1, v2) {
+        return v1 >= v2;
+    },
+    and: function (v1, v2) {
+        return v1 && v2;
+    },
+    or: function (v1, v2) {
+        return v1 || v2;
+    }
+});
+
 Handlebars.registerHelper("equals", function (a, b) {
   return (a == b);
 });
@@ -69,9 +96,9 @@ Handlebars.registerHelper( "compare", function( v1, op, v2, options ) {
   return options.inverse( this );
 } );
 
-$.templatePath = '/static/html/{{tagName}}.html'
-$.templateEvents = []
-
+$.jsonBaseUrl = '';
+$.templatePath = '/static/html/{{tagName}}.html';
+$.templateEvents = [];
 
 jQuery.fn.extend({
 
@@ -126,6 +153,14 @@ jQuery.fn.extend({
                         // 1. les attribues
                         // 2. les balises <>
                         // 3. les request
+                        // 4. les config js
+
+                        // on recupere ce qu'il y a dans les config
+                        if(CONFIG != undefined){
+                            $.each(CONFIG, function(index, value){
+                                content[index] = value
+                            })
+                        }
 
                         // on recupere ce qu'il y a dans le request et on ajoute. permet le replacement dans les balises
                         $.each($.url().param(), function(index, value){
@@ -204,6 +239,7 @@ jQuery.fn.extend({
                     }
                 }
                 //sleep(100)
+                return true
             },
             checkEventAfterRender: function(){
                 $.template().launchEventFor(object)
@@ -347,7 +383,7 @@ jQuery.fn.extend({
                 }
                 else{
 
-                    this.byUrl(url, callback) 
+                    this.byUrl($.jsonBaseUrl+url, callback) 
                 }
                 // suppression de l'attribut pour éviter de recommencer
                 //object.removeAttr('json')
@@ -425,7 +461,7 @@ jQuery.template = function(){
     
     return {
         render: function(object){
-            object.component().render()
+            return object.component().render()
         },
         ready: function(ev){
             $.templateEvents.push(ev)
@@ -440,4 +476,3 @@ jQuery.template = function(){
         }
     }
 }
-
