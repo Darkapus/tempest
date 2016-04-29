@@ -38,19 +38,49 @@ Handlebars.setDelimiter = function(start,end){
     Handlebars.compile = function(source){
         var s = "\\"+start,
             e = "\\"+end,
-            RE = new RegExp('('+s+'{2,3})(.*?)('+e+'{2,3})','ig');
+            RE1 = new RegExp('('+s+'{2,3})(.*?)('+e+'{2,3})','ig'),
+            RE2 = new RegExp('(\\{{2,3})(.*?)(\\}{2,3})','ig'),
+            RE3 = new RegExp('(\\#{2,3})(.*?)(\\#{2,3})','ig');
 
-            replacedSource = source.replace(RE,function(match, startTags, text, endTags, offset, string){
-                var startRE = new RegExp(s,'ig'), endRE = new RegExp(e,'ig');
+            if(start != '{'){
+                source = source.replace(RE2,function(match, startTags, text, endTags, offset, string){
+                    var startRE = new RegExp("\\"+"{",'ig'), endRE = new RegExp("\\"+"}",'ig');
+                    startTags = startTags.replace(startRE,'|');
+                    endTags = endTags.replace(endRE,'|');
+                    return startTags+text+endTags;
+                });
 
-                startTags = startTags.replace(startRE,'\{');
-                endTags = endTags.replace(endRE,'\}');
+                source = source.replace(RE1,function(match, startTags, text, endTags, offset, string){
+                    var startRE = new RegExp(s,'ig'), endRE = new RegExp(e,'ig');
 
-                return startTags+text+endTags;
-            });
+                    startTags = startTags.replace(startRE,'\{');
+                    endTags = endTags.replace(endRE,'\}');
 
-        return Handlebars.original_compile(replacedSource);
+                    return startTags+text+endTags;
+                });
+                /*
+                source.replace(RE3,function(match, startTags, text, endTags, offset, string){
+                    var startRE = new RegExp(s,'ig'), endRE = new RegExp(e,'ig');
+
+                    startTags = startTags.replace(startRE,'\{');
+                    endTags = endTags.replace(endRE,'\}');
+
+                    return startTags+text+endTags;
+                });*/
+            }
+/*
+            return function ret(context, execOptions) {
+              if (!compiled) {
+                compiled = compileInput();
+              }
+              return compiled.call(this, context, execOptions);
+            }*/
+
+            //console.log(Handlebars.original_compile(source));
+            return Handlebars.original_compile(source);
     };
+
+
 };
 Handlebars.registerHelper({
     eq: function (v1, v2) {
@@ -78,6 +108,13 @@ Handlebars.registerHelper({
         return v1 || v2;
     }
 });
+
+function escapeRegExp(str) {
+    return str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+}
+function replaceAll(str, find, replace) {
+  return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
+}
 
 Handlebars.registerHelper("equals", function (a, b) {
   return (a == b);
@@ -186,18 +223,35 @@ jQuery.fn.extend({
                         content.body = object.html()
                         
                         // templatage
-                        Mustache.parse(data, ["[[", "]]"]);
+                        //Mustache.parse(data, ["[[", "]]"]);
+                        
+                        data = replaceAll(data, '{{','|x');
+                        data = replaceAll(data, '}}','x|');
 
-                        rendered = Mustache.render(data, content);
+                        data = replaceAll(data, '[[','{{');
+                        data = replaceAll(data, ']]','}}');
+
+                        //Handlebars.setDelimiter('[',']');
+
+                        var template = Handlebars.compile(data);
+
+                        var rendered = template(content);
+
+                  
+                        //rendered = Mustache.render(data, content);
+                        rendered = replaceAll(rendered, '|x', '{{');
+                        rendered = replaceAll(rendered, 'x|', '}}');
 
                         // decode en html entities pour bien construire le dom
                         decode = object.decodeEntities(rendered)
-
+                        
                         // le dom sera intégré en tant que composant jquery
                         newDom = $(decode)
 
                         $.each(attributes, function(index,value){
-                            newDom.attr(index, value)
+                            if(index != 'callback'){
+                                newDom.attr(index, value)
+                            }
                         })
                         
                         // on remplace l'objet courant par le nouvel
@@ -209,6 +263,10 @@ jQuery.fn.extend({
                         newDom.each(function(){
                             $(this).component().render()
                         });
+
+                        object.callback()
+
+                        newDom.find('[json]').addClass('hidden')
                     });
                 }
                 else{
@@ -374,19 +432,22 @@ jQuery.fn.extend({
 
         return {
             byAttr: function(callback){
-                var url = object.attr('json')
+                if(object.hasAttr('json')){
 
-                if(url.substring(0,1) == '='){
-                    // transformation de la chaine en JSON puis lancement
-                    // console.log(jQuery.parseJSON(url.substring(1)))
-                    this.byData(jQuery.parseJSON(url.substring(1)), callback)
-                }
-                else{
+                    var url = object.attr('json')
 
-                    this.byUrl($.jsonBaseUrl+url, callback) 
+                    if(url.substring(0,1) == '='){
+                        // transformation de la chaine en JSON puis lancement
+                        // console.log(jQuery.parseJSON(url.substring(1)))
+                        this.byData(jQuery.parseJSON(url.substring(1)), callback)
+                    }
+                    else{
+
+                        this.byUrl($.jsonBaseUrl+url, callback) 
+                    }
+                    // suppression de l'attribut pour éviter de recommencer
+                    //object.removeAttr('json')
                 }
-                // suppression de l'attribut pour éviter de recommencer
-                //object.removeAttr('json')
             },
             byUrl: function(url, callback){
                 var current = this
@@ -413,6 +474,8 @@ jQuery.fn.extend({
                 }
                 // rendu du composant, on recommence la routine car le nouveau composant remplace l'ancien
                 newDom.callback()
+
+                newDom.removeClass('hidden')
             },
             load: function(url, callback){
 
@@ -434,8 +497,8 @@ jQuery.fn.extend({
     },
     callback: function(){
         if(this.hasAttr('callback')){
-            console.log(this.attr('callback'));
             window[this.attr('callback')](this) 
+            //this.removeAttr('callback')
         }   
     },
     jsonReload: function(callback){
