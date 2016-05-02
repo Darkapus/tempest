@@ -25,89 +25,7 @@
     }
     return $(this).attr(name) !== undefined;
 };
-/**
-* change the delimiter tags of Handlebars
-* @author Francesco Delacqua
-* @param string start a single character for the starting delimiter tag
-* @param string end a single character for the ending delimiter tag
-*/
-Handlebars.setDelimiter = function(start,end){
-    //save a reference to the original compile function
-    if(!Handlebars.original_compile) Handlebars.original_compile = Handlebars.compile;
 
-    Handlebars.compile = function(source){
-        var s = "\\"+start,
-            e = "\\"+end,
-            RE1 = new RegExp('('+s+'{2,3})(.*?)('+e+'{2,3})','ig'),
-            RE2 = new RegExp('(\\{{2,3})(.*?)(\\}{2,3})','ig'),
-            RE3 = new RegExp('(\\#{2,3})(.*?)(\\#{2,3})','ig');
-
-            if(start != '{'){
-                source = source.replace(RE2,function(match, startTags, text, endTags, offset, string){
-                    var startRE = new RegExp("\\"+"{",'ig'), endRE = new RegExp("\\"+"}",'ig');
-                    startTags = startTags.replace(startRE,'|');
-                    endTags = endTags.replace(endRE,'|');
-                    return startTags+text+endTags;
-                });
-
-                source = source.replace(RE1,function(match, startTags, text, endTags, offset, string){
-                    var startRE = new RegExp(s,'ig'), endRE = new RegExp(e,'ig');
-
-                    startTags = startTags.replace(startRE,'\{');
-                    endTags = endTags.replace(endRE,'\}');
-
-                    return startTags+text+endTags;
-                });
-                /*
-                source.replace(RE3,function(match, startTags, text, endTags, offset, string){
-                    var startRE = new RegExp(s,'ig'), endRE = new RegExp(e,'ig');
-
-                    startTags = startTags.replace(startRE,'\{');
-                    endTags = endTags.replace(endRE,'\}');
-
-                    return startTags+text+endTags;
-                });*/
-            }
-/*
-            return function ret(context, execOptions) {
-              if (!compiled) {
-                compiled = compileInput();
-              }
-              return compiled.call(this, context, execOptions);
-            }*/
-
-            //console.log(Handlebars.original_compile(source));
-            return Handlebars.original_compile(source);
-    };
-
-
-};
-Handlebars.registerHelper({
-    eq: function (v1, v2) {
-        return v1 === v2;
-    },
-    ne: function (v1, v2) {
-        return v1 !== v2;
-    },
-    lt: function (v1, v2) {
-        return v1 < v2;
-    },
-    gt: function (v1, v2) {
-        return v1 > v2;
-    },
-    lte: function (v1, v2) {
-        return v1 <= v2;
-    },
-    gte: function (v1, v2) {
-        return v1 >= v2;
-    },
-    and: function (v1, v2) {
-        return v1 && v2;
-    },
-    or: function (v1, v2) {
-        return v1 || v2;
-    }
-});
 
 function escapeRegExp(str) {
     return str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
@@ -115,23 +33,6 @@ function escapeRegExp(str) {
 function replaceAll(str, find, replace) {
   return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
 }
-
-Handlebars.registerHelper("equals", function (a, b) {
-  return (a == b);
-});
-Handlebars.registerHelper( "compare", function( v1, op, v2, options ) {
-
-  var c = {
-    "eq": function( v1, v2 ) {
-      return v1 == v2;
-    }
-  }
-
-  if( Object.prototype.hasOwnProperty.call( c, op ) ) {
-    return c[ op ].call( this, v1, v2 ) ? options.fn( this ) : options.inverse( this );
-  }
-  return options.inverse( this );
-} );
 
 $.jsonBaseUrl = '';
 $.templatePath = '/static/html/{{tagName}}.html';
