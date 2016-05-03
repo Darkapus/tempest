@@ -1,3 +1,9 @@
+function escapeRegExp(str) {
+    return str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+}
+function replaceAll(str, find, replace) {
+  return str.replace(new RegExp(find.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"), 'g'), replace);
+}
 
 (function(old) {
   $.fn.attr = function() {
@@ -27,16 +33,14 @@
 };
 
 
-function escapeRegExp(str) {
-    return str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
-}
-function replaceAll(str, find, replace) {
-  return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
-}
-
 $.jsonBaseUrl = '';
 $.templatePath = '/static/html/{{tagName}}.html';
 $.templateEvents = [];
+
+// determine le nombre d'appels ajax
+var activeAjaxConnections = 0;
+
+
 
 jQuery.fn.extend({
 
@@ -76,8 +80,18 @@ jQuery.fn.extend({
 
                     var current = this // current = object courant, soit component et non pas $(this)
                     
-                    $.get( templatePath, function( data ) {
-                        
+                    $.ajax( {
+                        url:templatePath,
+                        method:'GET',
+                        beforeSend: function(xhr) {activeAjaxConnections++;}
+                    }).error(function(){
+                        activeAjaxConnections--;
+                        if(activeAjaxConnections==0){
+                            $.launch()
+                        }
+                    }).success( function( data ) {
+                        activeAjaxConnections--;
+
                         // suppression de l'attribut component
                         object.removeAttr('component')
 
@@ -126,29 +140,12 @@ jQuery.fn.extend({
                         // templatage
                         //Mustache.parse(data, ["[[", "]]"]);
                         
-                        data = replaceAll(data, '{{','|x');
-                        data = replaceAll(data, '}}','x|');
-
-                        data = replaceAll(data, '[[','{{');
-                        data = replaceAll(data, ']]','}}');
-
-                        //Handlebars.setDelimiter('[',']');
-
-                        var template = Handlebars.compile(data);
-
-                        var rendered = template(content);
-
-                  
-                        //rendered = Mustache.render(data, content);
-                        rendered = replaceAll(rendered, '|x', '{{');
-                        rendered = replaceAll(rendered, 'x|', '}}');
-
-                        // decode en html entities pour bien construire le dom
-                        decode = object.decodeEntities(rendered)
+                        // on constuit la template
+                        // data ici est le html rendu par ajax
+                        tpl = object.template()
+                        tpl.set(data)
+                        newDom = tpl.getWithData(content, ['[[',']]'])
                         
-                        // le dom sera intégré en tant que composant jquery
-                        newDom = $(decode)
-
                         $.each(attributes, function(index,value){
                             if(index != 'callback'){
                                 newDom.attr(index, value)
@@ -165,9 +162,17 @@ jQuery.fn.extend({
                             $(this).component().render()
                         });
 
-                        object.callback()
+                        // on lance le callback du component
+                        // le callback est lancé avec l'objet rendu et non pas celui du dom component
+                        if(object.hasAttr('callback')){
+                            window[object.attr('callback')](newDom) 
+                        }
 
                         newDom.find('[json]').addClass('hidden')
+
+                        if(activeAjaxConnections==0){
+                            $.launch()
+                        }
                     });
                 }
                 else{
@@ -185,9 +190,15 @@ jQuery.fn.extend({
 
                         // on load en fonction de l'attribut puis suppression de l'attribut
                         // on load dans la template en replaceWith
+                        // est utilisé l'attribut callback et json
+                        // json fonctionne que sur le dom non component
                         object.jsonLoader(template).load()
                     }
                     else{
+                        // on lance les callback du dom (si pas json)
+                        object.callback()
+                        // on supprime le stop pour cosmetique
+                        // le stop empeche d'aller plus loin dans le dom pour le rendu
                         if(object.hasAttr('stop')){
                             object.removeAttr('stop');
                         }
@@ -202,8 +213,6 @@ jQuery.fn.extend({
             },
             checkEventAfterRender: function(){
                 $.template().launchEventFor(object)
-
-                
 
                 if(object.hasAttr('destroy')){
                     object.destroy()
@@ -222,8 +231,15 @@ jQuery.fn.extend({
                 if(method==undefined){
                     method = 'GET';
                 }
-                $.ajax( {"url":url, "method":method}).done(
+                $.ajax( {"url":url, "method":method,beforeSend: function(xhr) {activeAjaxConnections++;}})
+                .error(function(){
+                    activeAjaxConnections--;
+                    if(activeAjaxConnections==0){
+                        $.launch()
+                    }})
+                .success(
                     function( data ) {
+                        activeAjaxConnections--;
                         if(append){
                             newDom = $("<loader><h1><span class='glyphicon glyphicon-download'></span></h1></loader>")
                             object.append(newDom)
@@ -233,6 +249,9 @@ jQuery.fn.extend({
                             newDom = $("<loader></h1><span class='glyphicon glyphicon-download'></span></h1></loader>")
                             object.html(newDom)
                             $(data).component().render(newDom)   
+                        }
+                        if(activeAjaxConnections==0){
+                            $.launch()
                         }
                     
                 })
@@ -298,14 +317,27 @@ jQuery.fn.extend({
             },
             getWithData: function(data, tags){
                 if(tags){
-                    // templatage
-                    Mustache.parse(data, ["[[", "]]"]);
-                        
-                    // constuction du rendu
-                    var rendered = Mustache.render(data, content);
+                    if(!this.get()){
+                        this.init();
+                    }
+
+                    content = this.get();
+
+                    content = replaceAll(content, '{{','|x');
+                    content = replaceAll(content, '}}','x|');
+
+                    content = replaceAll(content, '[[','{{');
+                    content = replaceAll(content, ']]','}}');
+
+                    var template = Handlebars.compile(content);
+                    var rendered = template(data);
+
+                    //rendered = Mustache.render(data, content);
+                    rendered = replaceAll(rendered, '|x', '{{');
+                    rendered = replaceAll(rendered, 'x|', '}}');
 
                     // decode en html entities pour bien construire le dom
-                    var decode = object.decodeEntities(rendered)
+                    decode = object.decodeEntities(rendered)
 
                     // le dom sera intégré en tant que composant jquery
                     return $(decode)
@@ -332,6 +364,12 @@ jQuery.fn.extend({
         }
 
         return {
+            setData: function(content){ // le set du template
+                return jQuery.data(object[0], "jsonData", content)
+            },
+            getData: function(){
+                return jQuery.data(object[0], "jsonData")
+            },
             byAttr: function(callback){
                 if(object.hasAttr('json')){
 
@@ -340,9 +378,12 @@ jQuery.fn.extend({
                     if(url.substring(0,1) == '='){
                         // transformation de la chaine en JSON puis lancement
                         // console.log(jQuery.parseJSON(url.substring(1)))
-                        this.byData(jQuery.parseJSON(url.substring(1)), callback)
+                        // on conserve la data
+                        this.setData(jQuery.parseJSON(url.substring(1)))
+                        // on map la data
+                        this.byData(callback)
                     }
-                    else{
+                    else if(url){
 
                         this.byUrl($.jsonBaseUrl+url, callback) 
                     }
@@ -353,29 +394,41 @@ jQuery.fn.extend({
             byUrl: function(url, callback){
                 var current = this
                 
-                $.getJSON( url, function( data ) {
+                $.ajax( {url:url,dataType:"json",beforeSend: function(xhr) {activeAjaxConnections++;}}).success( function( data ) {
+                    activeAjaxConnections--
+                    // on conserve la data
+                    current.setData(data)
+                    // on map la data
+                    current.byData(callback)
                     
-                    current.byData(data, callback)
-                    
-                }).fail(function() {
+                    if(activeAjaxConnections==0){
+                        $.launch()
+                    }
+
+                }).error(function() {
+                    activeAjaxConnections--
                     // on affiche dans le console log pour avoir une trace quelque part
-                    console.log( "erreur de traitement json" );
+                    console.log( "erreur de traitement json sur : "+url );
                     //console.log("==="+object.prop('tagName')+"===")
                     //console.log("-url "+object.attr('json'));
                     //console.log($('body').html())
-
+                    if(activeAjaxConnections==0){
+                        $.launch()
+                    }
                   })
             },
-            byData: function(data, callback){
+            byData: function(callback){
                 // rendu du dom avec mustache + la data du json
-                var newDom = template.htmlWithData(data)
+                var newDom = template.htmlWithData(this.getData())
 
                 if(callback != undefined){
                     callback()    
                 }
                 // rendu du composant, on recommence la routine car le nouveau composant remplace l'ancien
+                // le callback n'est pas remplacé c'est l'un des seuls element du dom qui n'est pas remonté
                 newDom.callback()
 
+                // on affiche ce qui est caché. Precedemment on a caché tout ce qui était sous le json par soucis cosmetique
                 newDom.removeClass('hidden')
             },
             load: function(url, callback){
@@ -398,6 +451,7 @@ jQuery.fn.extend({
     },
     callback: function(){
         if(this.hasAttr('callback')){
+            //console.log(this.attr('callback'))
             window[this.attr('callback')](this) 
             //this.removeAttr('callback')
         }   
@@ -421,10 +475,16 @@ jQuery.decodeEntities = function(input){
     return y.value;
 }
 
+$.launch = function(){
+    console.log('Fin des appels')
+}
 jQuery.template = function(){
     
     return {
-        render: function(object){
+        render: function(object, launch){
+            if(launch != undefined){
+                this.rendered(launch)
+            }
             return object.component().render()
         },
         ready: function(ev){
@@ -437,6 +497,9 @@ jQuery.template = function(){
             for(i=0; i<this.getEvents().length; i++){
                 this.getEvents()[i](object)
             }
+        },
+        rendered: function(launch){
+            $.launch = launch;
         }
     }
 }
