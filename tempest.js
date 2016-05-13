@@ -89,6 +89,7 @@ jQuery.fn.extend({
                         if(activeAjaxConnections==0){
                             $.launch()
                         }
+
                     }).success( function( data ) {
                         activeAjaxConnections--;
 
@@ -137,9 +138,6 @@ jQuery.fn.extend({
                         // traitement du body (le reste)
                         content.body = object.html()
                         
-                        // templatage
-                        //Mustache.parse(data, ["[[", "]]"]);
-                        
                         // on constuit la template
                         // data ici est le html rendu par ajax
                         tpl = object.template()
@@ -168,6 +166,7 @@ jQuery.fn.extend({
                             window[object.attr('callback')](newDom) 
                         }
 
+                        // on cache la data qui sous le json, ce sera affiché à nouveau une fois rendu
                         newDom.find('[json]').addClass('hidden')
 
                         if(activeAjaxConnections==0){
@@ -442,7 +441,31 @@ jQuery.fn.extend({
             }
         }
     },
+    jsonMapping: function(url) {
+        var element = this;
+        $.ajax( {url:url,dataType:"json"}).success( function( data ) {
 
+            $.each(data, function(index, value){
+                element.find('#'+index+"").each(function(){
+                    //alert(index+':'+$(this).prop('tagName')+":"+value)
+                    switch($(this).prop('tagName')){
+                        case 'INPUT':
+                        case 'SELECT': 
+                            break;
+                            $(this).val(value);
+                        default:
+                            $(this).html(value);  
+                            break;
+                    }
+                    
+                });
+
+            });
+        }).error(function() {
+            // on affiche dans le console log pour avoir une trace quelque part
+            console.log( "erreur de traitement json sur : "+url );
+        })
+    },
     decodeEntities: function(input) {
         return $.decodeEntities(input)
     },
@@ -501,5 +524,41 @@ jQuery.template = function(){
         rendered: function(launch){
             $.launch = launch;
         }
+    }
+}
+
+var Tempest = {
+    // les events se lances à chaque execution de composants
+    events: [],
+
+    render: function(object, launch){
+        // rendered est défini à ce moment là
+        // il permet de d'avoir le document ready de tempest
+        if(launch != undefined){
+            this.rendered = launch
+        }
+        // ci-dessous va basculer, je prefere ne pas etendre de jquery pour le fonctionnement
+        return object.component().render()
+    },
+    // Ajout d'un nouvel evenement
+    addEvent: function(ev){
+        this.events.push(ev)
+    },
+    ready: function(ev){
+        console.log('ready is deprecated, preferable to use addEvent');
+        this.addEvent(ev);
+    },
+    getEvents: function(){
+        return this.events
+    },
+    // lance tous les evenement pour un objet en particulier (celui qui sera rendu entre autre)
+    launchEventFor: function(object){
+        for(i=0; i<this.getEvents().length; i++){
+            this.getEvents()[i](object)
+        }
+    },
+    // une fois le tout rendu, c'est ce script qui est lancé.
+    rendered: function(){
+
     }
 }
